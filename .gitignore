@@ -1,0 +1,4 @@
+# Cópia local antiga do Omarchy original (agora embutido em home/)
+/omarchy-quattro/
+__pycache__/
+*.pyc

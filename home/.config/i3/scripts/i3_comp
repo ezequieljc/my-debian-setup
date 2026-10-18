@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+
+## Copyright (C) 2020-2026 Aditya Shakya <adi1090x@gmail.com>
+
+# i3 directory
+DIR="$HOME/.config/i3"
+
+# Do not kill a running picom. First login still starts picom here; pick
+# up a new picom.conf with `killall picom` only when you mean it.
+if pgrep -u "$UID" -x picom >/dev/null; then
+	exit 0
+fi
+
+# Backend selection. Config defaults to xrender (correct ARGB for QS popups
+# on software GL). Upgrade to glx on real/VirGL GPUs; never use glx with
+# llvmpipe/softpipe/swrast — rounded popup corners become a square fringe.
+# Override anytime with PICOM_BACKEND=xrender|glx.
+picom_backend="${PICOM_BACKEND:-}"
+if [[ -z $picom_backend ]]; then
+	renderer="$(glxinfo -B 2>/dev/null | awk -F': ' '/OpenGL renderer string/{print tolower($2); exit}')"
+	case $renderer in
+		""|*llvmpipe*|*softpipe*|*swrast*)
+			picom_backend=xrender
+			;;
+		*)
+			picom_backend=glx
+			;;
+	esac
+fi
+
+picom --config "$DIR"/picom.conf --backend "$picom_backend" &

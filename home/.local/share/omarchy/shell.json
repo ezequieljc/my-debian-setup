@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "bar": {
+    "enabled": true,
+    "position": "top",
+    "centerAnchor": "omarchy.clock",
+    "layout": {
+      "left": [
+        {
+          "id": "omaxian.mode"
+        },
+        {
+          "id": "omaxian.menu",
+          "icon": ""
+        },
+        {
+          "id": "omarchy.workspaces"
+        }
+      ],
+      "center": [
+        {
+          "id": "omaxian.media"
+        },
+        {
+          "id": "omarchy.clock",
+          "format": "yyyy-MM-dd HH:mm"
+        }
+      ],
+      "right": [
+        {
+          "id": "omaxian.controlpanel"
+        },
+        {
+          "id": "omaxian.sysstats"
+        },
+        {
+          "id": "omarchy.keyboard-layout"
+        },
+        {
+          "id": "omarchy.network"
+        },
+        {
+          "id": "omaxian.vpn"
+        },
+        {
+          "id": "omaxian.updates"
+        },
+        {
+          "id": "omaxian.notifications"
+        },
+        {
+          "id": "omaxian.help"
+        },
+        {
+          "id": "omarchy.indicators"
+        },
+        {
+          "id": "omarchy.tray"
+        },
+        {
+          "id": "omarchy.power"
+        },
+        {
+          "id": "omaxian.powermenu"
+        }
+      ]
+    }
+  },
+  "plugins": [],
+  "disabledPlugins": [
+    "omarchy.polkit",
+    "omaxian.dock",
+    "omarchy.disk-speedtest",
+    "omarchy.wifiqr"
+  ],
+  "idle": {
+    "enabled": false,
+    "screensaver": 150,
+    "lock": 300
+  }
+}

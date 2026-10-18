@@ -1,0 +1,8 @@
+{
+  // Mesclado por id sobre o omarchy-menu.jsonc padrão.
+  // Esconde estas entradas do menu principal.
+  "learn": {"when": "false"},
+  "trigger": {"when": "false"},
+  "update": {"when": "false"},
+  "about": {"when": "false"}
+}

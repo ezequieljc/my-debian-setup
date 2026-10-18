@@ -1,0 +1,32 @@
+# QuielRed: grafite com vermelho carmim fosco
+mode = "dark"
+
+accent = "#b8414c"
+selection = "#3a2a2d"
+muted = "#6e6466"
+
+background = "#1d1b1c"
+dark_background = "#161415"
+darker_background = "#100f0f"
+lighter_background = "#2b2627"
+
+foreground = "#d9d1d1"
+dark_foreground = "#6e6466"
+light_foreground = "#b5abac"
+bright_foreground = "#eee8e8"
+
+red = "#c24b55"
+yellow = "#d2a65e"
+orange = "#c97c55"
+green = "#8fa870"
+cyan = "#7ea6a3"
+blue = "#7d3f47"
+magenta = "#c77d9b"
+brown = "#6b3a33"
+
+bright_red = "#d86a73"
+bright_yellow = "#e2bc7c"
+bright_green = "#a8c08a"
+bright_cyan = "#9cc0bd"
+bright_blue = "#a35d66"
+bright_magenta = "#dc9bb5"

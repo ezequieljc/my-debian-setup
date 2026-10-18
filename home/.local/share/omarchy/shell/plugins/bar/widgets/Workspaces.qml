@@ -1,0 +1,171 @@
+import QtQuick
+import QtQuick.Layouts
+import Quickshell
+import Quickshell.I3
+import qs.Commons
+import qs.Services
+import qs.Ui
+
+// X11 delta (T3, deltas.md): `Quickshell.Hyprland` → `Quickshell.I3`.
+// `I3Workspace` (number/urgent/active/focused/monitor/activate()) is a
+// near-1:1 match for `HyprlandWorkspace`. i3's workspace list only holds
+// workspaces that exist, so "occupied" = present in the list. No `.id`
+// (match on `.number`); no `.toplevels`. Left-click on a bar instance
+// pulls that workspace onto this output; Shift/middle-click only focuses
+// it (may jump to the other monitor). Keyboard Super+1…0 is still global.
+//
+// Focus commands go through `i3-msg`, not `I3.dispatch` / `ws.activate()`.
+// Quickshell.I3 does not reconnect after an i3 IPC restart (`PeerClosedError`
+// → "IPC connection is not open, ignoring request"), so in-process dispatch
+// can stay dead while the live socket still works. `unset I3SOCK` lets
+// i3-msg use the live `I3_SOCKET_PATH` X property. Use `bash -c` (not `-lc`)
+// so a heavy ~/.bashrc cannot stall the click→switch path.
+//
+// The pill styling (`BarPalette.workspace.*`) was ported over from eww's
+// `.ws-btn` states but never wired into this widget — the upstream T3
+// source it was structurally copied from just swaps the glyph and dims
+// unoccupied workspaces, no color at all. Wired up here so the focused
+// workspace is actually visible, not just a slightly different icon.
+BarWidget {
+  id: root
+  moduleName: "omarchy.workspaces"
+
+  function workspaceByNumber(n) {
+    var values = I3.workspaces.values
+    for (var i = 0; i < values.length; i++) {
+      if (values[i].number === n) return values[i]
+    }
+    return null
+  }
+
+  function workspaceNumbers() {
+    // Always show the full 1–10 row; occupied/focused state just changes opacity.
+    var nums = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    var values = I3.workspaces.values
+
+    for (var i = 0; i < values.length; i++) {
+      var n = values[i].number
+      if (n > 0 && n <= 10 && nums.indexOf(n) === -1) nums.push(n)
+    }
+
+    nums.sort(function(left, right) { return left - right })
+    return nums
+  }
+
+  function i3Ident(name) {
+    var s = String(name || "")
+    return /^[A-Za-z0-9._:-]+$/.test(s) ? s : ""
+  }
+
+  function i3Quiet(payload) {
+    Quickshell.execDetached([
+      "bash", "-c",
+      "unset I3SOCK; exec i3-msg -q " + Util.shellQuote(payload)
+    ])
+  }
+
+  function outputName() {
+    var win = (root.QsWindow && root.QsWindow.window) ? root.QsWindow.window : null
+    var screen = win ? win.screen : null
+    var mon = I3.monitorFor(screen)
+    if (mon && mon.name) return root.i3Ident(mon.name)
+    // When Quickshell.I3 is disconnected, monitorFor is null; Qt's screen
+    // name usually still matches the i3/xrandr output (e.g. HDMI-A-0).
+    return screen && screen.name ? root.i3Ident(screen.name) : ""
+  }
+
+  function focusWorkspace(n, pullHere) {
+    var num = Number(n)
+    if (!isFinite(num) || num < 1) return
+    var here = root.outputName()
+    var ws = root.workspaceByNumber(num)
+    var pull = pullHere !== false
+    var onThisOutput = !!(ws && ws.monitor && root.i3Ident(ws.monitor.name) === here)
+
+    // No named output (or I3/Qt disagree after a lid/dock change): just focus.
+    // Pulling onto a disabled panel ("No output matched") used to leave the
+    // click path looking dead when a ghost bar still claimed an eDP name.
+    if (!pull || !here || onThisOutput) {
+      root.i3Quiet("workspace number " + num)
+      return
+    }
+
+    // Click on this bar: focus this output, pull workspace N here if it
+    // lives elsewhere (or create it here), then switch to it.
+    root.i3Quiet("focus output " + here + "; [workspace=\"" + num + "\"] move workspace to output " + here + "; workspace number " + num)
+  }
+
+  readonly property real trailingGap: root.vertical ? 0 : Style.spaceReal(1.5)
+
+  implicitWidth: grid.implicitWidth + trailingGap
+  implicitHeight: grid.implicitHeight
+
+  GridLayout {
+    id: grid
+    anchors.fill: parent
+    anchors.rightMargin: root.trailingGap
+    columns: root.vertical ? 1 : root.workspaceNumbers().length
+    columnSpacing: root.vertical ? 0 : Style.space(1)
+    rowSpacing: root.vertical ? Style.space(2) : 0
+
+    Repeater {
+      model: root.workspaceNumbers()
+
+      Item {
+        id: cell
+        required property int modelData
+
+        readonly property var workspace: root.workspaceByNumber(modelData)
+        readonly property bool occupied: workspace !== null
+        readonly property bool focused: I3.focusedWorkspace !== null && I3.focusedWorkspace.number === modelData
+        // "active" = currently shown on some output (i3's sense of the word);
+        // on a single-monitor setup this is always the same workspace as
+        // "focused", so this branch only differs once a second output exists.
+        readonly property bool active: workspace !== null && workspace.active === true
+        readonly property bool urgent: workspace !== null && workspace.urgent === true
+
+        readonly property color pillColor: focused
+          ? BarPalette.workspace.activeBackground
+          : urgent
+            ? BarPalette.workspace.urgentBackground
+            : active
+              ? BarPalette.workspace.visibleBackground
+              : "transparent"
+        readonly property color textColor: focused
+          ? BarPalette.workspace.activeText
+          : urgent
+            ? BarPalette.workspace.urgentText
+            : active
+              ? BarPalette.workspace.visibleText
+              : BarPalette.workspace.normalText
+
+        // GridLayout sizes children off `implicitWidth`/`implicitHeight` (no
+        // `Layout.preferredWidth` set here), same as `WidgetButton` used to
+        // provide via `fixedWidth`/`fixedHeight` before this became a plain
+        // `Item` wrapping the pill background + the button.
+        implicitWidth: root.vertical ? root.barSize : Style.space(20)
+        implicitHeight: root.barSize
+
+        Rectangle {
+          anchors.fill: parent
+          radius: Style.cornerRadius
+          color: cell.pillColor
+        }
+
+        WidgetButton {
+          anchors.fill: parent
+          bar: root.bar
+          text: cell.focused ? "󱓻" : (cell.modelData === 10 ? "0" : String(cell.modelData))
+          foreground: cell.textColor
+          opacity: cell.occupied || cell.focused || cell.active || cell.urgent ? 1 : 0.5
+          horizontalMargin: 6
+          verticalPadding: 6
+          onPressed: function(button, modifiers) {
+            var jump = button === Qt.MiddleButton || ((modifiers || 0) & Qt.ShiftModifier)
+            root.focusWorkspace(cell.modelData, !jump)
+          }
+        }
+      }
+    }
+  }
+}

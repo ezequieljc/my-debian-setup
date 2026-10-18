@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+
+## Copyright (C) 2020-2026 Aditya Shakya <adi1090x@gmail.com>
+##
+## Autostart Programs
+
+# i3 dir
+idir="$HOME/.config/i3"
+
+# i3's /proc/environ can carry a stale I3SOCK (dead ipc-socket.<old-pid>) across
+# an in-place restart; drop it so `i3-msg` in autostarted helpers falls back to
+# the live I3_SOCKET_PATH X property.
+unset I3SOCK
+
+# Export desktop session
+export XDG_CURRENT_DESKTOP='i3'
+
+# Omarchy env. The authoritative place for this is ~/.xsessionrc (sourced
+# before i3 starts, so keybind execs inherit it — an export here only reaches
+# this script's own children). Kept as a fallback for those children.
+export OMARCHY_PATH="${OMARCHY_PATH:-$HOME/.local/share/omarchy}"
+case ":$PATH:" in *":$OMARCHY_PATH/bin:"*) ;; *) export PATH="$OMARCHY_PATH/bin:$PATH" ;; esac
+
+# This script is `exec` (login only). If it is ever put back on exec_always,
+# do not spawn watchers / dunst / wallpaper again — that blanks the session.
+autostart_once="${XDG_RUNTIME_DIR:-}/omarchy-i3-autostart"
+if [[ -n ${XDG_RUNTIME_DIR:-} ]] && ! mkdir "$autostart_once" 2>/dev/null; then
+	exit 0
+fi
+
+# xsettingsd is started once per login. Do not kill it (or picom) just to
+# start it again.
+if ! pidof xsettingsd >/dev/null; then
+	xsettingsd --config="$idir"/xsettingsd &
+fi
+
+# polkit agent (pkexec / Synaptic / sudo GUI prompts)
+"$idir"/scripts/i3_polkit
+
+# SPICE guest agent (VM clipboard sharing + display auto-resize). The
+# system spice-vdagentd runs from init; this is the per-session client half,
+# which no xdg-autostart runner starts under bare i3. Exits harmlessly on
+# bare metal (no virtio channel).
+if command -v spice-vdagent >/dev/null 2>&1 && ! pgrep -x spice-vdagent >/dev/null 2>&1; then
+	spice-vdagent &
+fi
+
+# Keyboard layout from ~/.config/omarchy/keyboard.json (Settings → Keyboard).
+# Synchronous so the map is in place before the bar starts.
+omarchy-keyboard-apply
+
+# Notification daemon FIRST — so dunst owns org.freedesktop.Notifications
+# before xfce4-power-manager (below) can D-Bus-activate xfce4-notifyd into it.
+"$idir"/scripts/i3_dunst
+
+# Enable power management. comm is truncated to 15 chars (xfce4-power-man),
+# so `pgrep -x xfce4-power-manager` never matches and used to spawn extra
+# copies that fight over lid/DPMS and blank the screens.
+if ! pgrep -u "$UID" -f '/xfce4-power-manager' >/dev/null; then
+	xfce4-power-manager &
+fi
+
+# Fix cursor
+xsetroot -cursor_name left_ptr
+
+# Restore wallpaper
+"$idir"/wallpaper.sh
+
+# Monitor lid / hotplug and re-apply xrandr layout
+"$idir"/scripts/i3_display_watch.sh &
+
+# Start mpd before the status bar (omaxian.media needs the daemon)
+"$idir"/scripts/i3_mpd
+
+# Bridge MPD onto the session bus as an MPRIS player (org.mpris.MediaPlayer2.mpd)
+# so omaxian.media picks it up like any other source. Bare i3 doesn't run an
+# xdg-autostart daemon, so mpdris2's /etc/xdg/autostart entry never fires here.
+if command -v mpDris2 >/dev/null 2>&1 && ! pgrep -x mpDris2 >/dev/null 2>&1; then
+	mpDris2 &
+fi
+
+# First-run guard: make sure a theme is applied so current/theme/* exists
+# before the bar starts (i3's include of current/theme/i3.conf is non-fatal,
+# but the QS bar palette and omarchy-theme-current depend on it).
+if [ ! -f "$HOME/.local/state/omarchy/current/theme.name" ]; then
+	omarchy-theme-set "QuielRed" || true
+fi
+
+# Launch the Quickshell bar
+"$idir"/scripts/i3_bar
+
+# Lauch compositor
+"$idir"/scripts/i3_comp
+
+# Screen lock: xss-lock (session Lock + optional idle via xset) from Settings.
+# Delay so Quickshell / picom finish coming up before xss-lock can ever run the
+# locker (i3_lock stops picom; doing that mid-startup freezes or kills QS).
+if command -v omarchy-idle-lock-apply >/dev/null 2>&1; then
+	( sleep 3; omarchy-idle-lock-apply ) &
+fi
+
+# Host-only apps (skip in VM)
+is_virtual_machine() {
+	if command -v systemd-detect-virt >/dev/null 2>&1; then
+		systemd-detect-virt --vm --quiet 2>/dev/null
+		return
+	fi
+	local product
+	product="$(< /sys/class/dmi/id/product_name 2>/dev/null)" || product=""
+	case "${product,,}" in
+		*virtualbox*|*vmware*|*qemu*|*kvm*|*bochs*|*parallels*|*xen*|*hyper-v*|*innotek*)
+			return 0
+			;;
+	esac
+	grep -qi hypervisor /proc/cpuinfo 2>/dev/null
+}
+
+# Extra user apps from Settings → Startup (~/.config/omarchy/startup.json).
+# Session daemons above stay hardcoded; this only launches opted-in .desktop ids.
+# omarchy-startup-launch itself takes a once-per-login lock under
+# $XDG_RUNTIME_DIR so apps are not duplicated.
+if command -v omarchy-startup-launch >/dev/null 2>&1; then
+	omarchy-startup-launch &
+fi

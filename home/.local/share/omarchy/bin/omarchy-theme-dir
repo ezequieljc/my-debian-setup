@@ -1,0 +1,35 @@
+#!/bin/bash
+
+# omarchy:summary=Print the directory holding a theme, preferring a user-installed copy
+# omarchy:args=<theme-name>
+# omarchy:examples=omarchy theme dir tokyo-night
+
+theme="${1:-}"
+
+if [[ -z $theme ]]; then
+  echo "Usage: omarchy-theme-dir <theme-name>" >&2
+  exit 1
+fi
+
+bases=("$HOME/.config/omarchy/themes" "$OMARCHY_PATH/themes")
+
+for base in "${bases[@]}"; do
+  if [[ -d $base/$theme ]]; then
+    echo "$base/$theme"
+    exit 0
+  fi
+done
+
+# Callers pass lowercased slugs; match theme dirs with capitals (e.g. QuielRed).
+for base in "${bases[@]}"; do
+  for dir in "$base"/*/; do
+    dir=${dir%/}
+    name=${dir##*/}
+    if [[ ${name,,} == "${theme,,}" ]]; then
+      echo "$dir"
+      exit 0
+    fi
+  done
+done
+
+echo "$OMARCHY_PATH/themes/$theme"

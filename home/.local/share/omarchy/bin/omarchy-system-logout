@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# omarchy:summary=Log out of the i3 session
+# omarchy:examples=omarchy system logout
+
+set -euo pipefail
+
+command -v omarchy-osd >/dev/null 2>&1 &&
+  omarchy-osd -i logout -m "Logging out" >/dev/null 2>&1 || true
+
+exec omarchy-host logout

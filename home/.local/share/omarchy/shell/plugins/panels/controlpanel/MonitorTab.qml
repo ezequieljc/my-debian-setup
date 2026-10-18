@@ -1,0 +1,313 @@
+import QtQuick
+import Quickshell.Io
+import qs.Commons
+import qs.Ui
+import "Model.js" as Model
+
+// Control Panel tab: display/monitor configuration. A fresh
+// reimplementation of plugins/panels/monitor/Panel.qml's content — Control
+// Panel is a standalone plugin, this file has no runtime dependency on the
+// original.
+//
+// Deliberately simplified vs. the original: no keyboard D-pad cursor system
+// (sectionIndex/pillIndex/moveCursor/activateCursor) — same mouse-only
+// simplification as every other tab here. The original's D-pad also
+// intercepted Tab for bar-panel-cycling, which is exactly the conflict
+// Panel.qml's own header comment explains this plugin avoids by not giving
+// any tab its own PanelKeyCatcher.
+Item {
+  id: root
+
+  // Not `required`: injected by Control Panel's Loader.setSource() map —
+  // see AudioTab.qml for the rationale.
+  property QtObject bar: null
+  property bool active: false
+
+  property var outputs: []
+  property bool lidPresent: false
+  property bool lidClosed: false
+
+  readonly property var connectedOutputs: Model.monitorToArray(root.outputs).filter(function(o) { return !!(o && o.connected) })
+
+  implicitWidth: Style.space(380)
+  implicitHeight: column.implicitHeight
+
+  function refresh() {
+    if (!listProc.running) listProc.running = true
+  }
+
+  function setMode(name, mode) {
+    if (!name || !mode || setProc.running) return
+    setProc.command = ["omarchy-monitor-set", name, mode]
+    setProc.running = true
+  }
+
+  function setOff(name) {
+    if (!name || setProc.running) return
+    setProc.command = ["omarchy-monitor-set", name, "--off"]
+    setProc.running = true
+  }
+
+  function toggleOutput(output) {
+    if (!output) return
+    if (output.enabled) { root.setOff(output.name); return }
+    var mode = output.currentMode || output.preferredMode
+    if (!mode) {
+      var modes = Model.sortModes(output.modes || [])
+      mode = modes.length > 0 ? modes[0] : ""
+    }
+    if (mode) root.setMode(output.name, mode)
+  }
+
+  function ingest(raw) {
+    var text = String(raw || "").trim()
+    if (!text) return
+    try {
+      var data = JSON.parse(text)
+    } catch (e) {
+      return
+    }
+    if (!data || typeof data !== "object") return
+    if (Array.isArray(data.outputs)) root.outputs = data.outputs
+    if (typeof data.lidPresent === "boolean") root.lidPresent = data.lidPresent
+    if (typeof data.lidClosed === "boolean") root.lidClosed = data.lidClosed
+  }
+
+  onActiveChanged: if (active) refresh()
+
+  Process {
+    id: listProc
+    property string stdoutBuf: ""
+    property int maxStdout: 65536
+    property bool overflowed: false
+    command: ["omarchy-monitor-list"]
+    stdout: SplitParser {
+      splitMarker: ""
+      onRead: function(chunk) {
+        if (listProc.overflowed) return
+        listProc.stdoutBuf += chunk
+        if (listProc.stdoutBuf.length > listProc.maxStdout) {
+          listProc.overflowed = true
+          listProc.stdoutBuf = ""
+          listProc.signal(15)
+          listKillTimer.start()
+        }
+      }
+    }
+    onStarted: {
+      listKillTimer.stop()
+      stdoutBuf = ""
+      overflowed = false
+    }
+    onExited: function() {
+      listKillTimer.stop()
+      var raw = overflowed ? "" : String(stdoutBuf || "")
+      stdoutBuf = ""
+      overflowed = false
+      if (raw) root.ingest(raw)
+    }
+  }
+
+  Timer {
+    id: listKillTimer
+    interval: 2000
+    onTriggered: listProc.signal(9)
+  }
+
+  Process {
+    id: setProc
+    property string stdoutBuf: ""
+    property int maxStdout: 65536
+    property bool overflowed: false
+    stdout: SplitParser {
+      splitMarker: ""
+      onRead: function(chunk) {
+        if (setProc.overflowed) return
+        setProc.stdoutBuf += chunk
+        if (setProc.stdoutBuf.length > setProc.maxStdout) {
+          setProc.overflowed = true
+          setProc.stdoutBuf = ""
+          setProc.signal(15)
+          setKillTimer.start()
+        }
+      }
+    }
+    onStarted: {
+      setKillTimer.stop()
+      stdoutBuf = ""
+      overflowed = false
+    }
+    onExited: function() {
+      setKillTimer.stop()
+      var raw = overflowed ? "" : String(stdoutBuf || "")
+      stdoutBuf = ""
+      overflowed = false
+      if (raw) root.ingest(raw)
+    }
+  }
+
+  Timer {
+    id: setKillTimer
+    interval: 2000
+    onTriggered: setProc.signal(9)
+  }
+
+  Timer { interval: 3000; running: root.active; repeat: true; onTriggered: root.refresh() }
+
+  Column {
+    id: column
+    width: parent.width
+    spacing: Style.space(14)
+
+    // ---------- Hero ----------
+    Item {
+      width: parent.width
+      implicitHeight: Math.max(heroIcon.implicitHeight, heroLabels.implicitHeight)
+
+      Text {
+        id: heroIcon
+        textFormat: Text.PlainText
+        text: Model.monitorIconFor(root.outputs)
+        color: root.bar.foreground
+        font.family: root.bar.fontFamily
+        font.pixelSize: Style.font.display
+        anchors.left: parent.left
+        anchors.verticalCenter: parent.verticalCenter
+      }
+
+      Column {
+        id: heroLabels
+        anchors.left: heroIcon.right
+        anchors.leftMargin: Style.space(14)
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        spacing: Style.space(2)
+
+        Text {
+          textFormat: Text.PlainText
+          text: "Monitor"
+          color: root.bar.foreground
+          font.family: root.bar.fontFamily
+          font.pixelSize: Style.font.title
+          font.bold: true
+          elide: Text.ElideRight
+          width: parent.width
+        }
+
+        Text {
+          textFormat: Text.PlainText
+          text: Model.monitorStatusLine(root.outputs, root.lidPresent, root.lidClosed).toUpperCase()
+          color: Qt.darker(root.bar.foreground, 1.4)
+          font.family: root.bar.fontFamily
+          font.pixelSize: Style.font.caption
+          font.bold: true
+          font.letterSpacing: 1.2
+          elide: Text.ElideRight
+          width: parent.width
+        }
+      }
+    }
+
+    PanelSeparator { foreground: root.bar.foreground }
+
+    Column {
+      width: parent.width
+      spacing: Style.space(14)
+      visible: root.connectedOutputs.length > 0
+
+      Repeater {
+        model: root.connectedOutputs
+
+        Column {
+          id: outputSection
+          required property var modelData
+          readonly property var output: modelData
+
+          width: parent.width
+          spacing: Style.space(8)
+
+          Item {
+            width: parent.width
+            implicitHeight: Math.max(sectionHeader.implicitHeight, powerRow.implicitHeight)
+
+            PanelSectionHeader {
+              id: sectionHeader
+              anchors.left: parent.left
+              anchors.right: powerRow.visible ? powerRow.left : parent.right
+              anchors.rightMargin: powerRow.visible ? Style.space(10) : 0
+              anchors.verticalCenter: parent.verticalCenter
+              elide: Text.ElideRight
+              text: Util.plain(outputSection.output.name.toUpperCase()
+                + (outputSection.output.isLaptopPanel ? " (LAPTOP)" : ""))
+                + (outputSection.output.primary ? " · PRIMARY" : "")
+              foreground: root.bar.foreground
+              fontFamily: root.bar.fontFamily
+            }
+
+            // State label + switch (not an action-word button — "Off" on a
+            // live display read as unclear). Same control as Audio/Bluetooth.
+            Row {
+              id: powerRow
+              anchors.right: parent.right
+              anchors.verticalCenter: parent.verticalCenter
+              visible: root.connectedOutputs.length >= 2
+              spacing: Style.space(8)
+
+              Text {
+                textFormat: Text.PlainText
+                text: outputSection.output.enabled ? "On" : "Off"
+                color: outputSection.output.enabled
+                  ? root.bar.foreground
+                  : Qt.darker(root.bar.foreground, 1.5)
+                font.family: root.bar.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                anchors.verticalCenter: parent.verticalCenter
+              }
+
+              ToggleSwitch {
+                checked: !!outputSection.output.enabled
+                busy: setProc.running
+                foreground: root.bar.foreground
+                trackHeight: Math.max(18, Math.round(Style.spacing.controlHeight * 0.45))
+                anchors.verticalCenter: parent.verticalCenter
+                onToggled: root.toggleOutput(outputSection.output)
+              }
+            }
+          }
+
+          Flow {
+            width: parent.width
+            spacing: Style.space(6)
+
+            Repeater {
+              model: Model.sortModes(outputSection.output.modes || [])
+
+              Button {
+                required property var modelData
+                text: modelData
+                fontSize: Style.font.bodySmall
+                foreground: root.bar.foreground
+                fontFamily: root.bar.fontFamily
+                horizontalPadding: Style.spacing.controlPaddingX
+                verticalPadding: Style.spacing.controlPaddingY + Style.space(2)
+                bordered: true
+                active: modelData === outputSection.output.currentMode
+                onClicked: root.setMode(outputSection.output.name, modelData)
+              }
+            }
+          }
+        }
+      }
+    }
+
+    Text {
+      textFormat: Text.PlainText
+      visible: root.connectedOutputs.length === 0
+      text: "No displays detected"
+      color: Qt.darker(root.bar.foreground, 1.5)
+      font.family: root.bar.fontFamily
+      font.pixelSize: Style.font.bodySmall
+      font.italic: true
+    }
+  }
+}
