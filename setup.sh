@@ -94,6 +94,8 @@ RECOMMENDED=(
 	fastfetch
 	# default terminal ($terminal in i3 keybindings)
 	xfce4-terminal
+	# network shares (SMB) in the canivt file manager
+	gvfs-backends gvfs-fuse
 )
 
 # Optional: hardware- or host-specific; nothing breaks without them.

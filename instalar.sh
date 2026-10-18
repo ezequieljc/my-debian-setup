@@ -34,17 +34,28 @@ fi
 echo "${bold}Instalando o my-debian-setup para $USER${reset}"
 sudo -v || die "não foi possível obter permissão de administrador."
 
-step "1/4  Pacotes do sistema"
+step "1/5  Pacotes do sistema"
 sudo "$REPO_DIR/setup.sh"
 
-step "2/4  Temas e comandos do Omarchy"
+step "2/5  Temas e comandos do Omarchy"
 "$REPO_DIR/install.sh"
 
-step "3/4  Configurações (i3, barra, terminal, fontes)"
+step "3/5  Configurações (i3, barra, terminal, fontes)"
 "$REPO_DIR/deploy.sh"
 fc-cache -f >/dev/null 2>&1 || true
 
-step "4/4  Ajustes finais"
+step "4/5  canivt (gerenciador de arquivos no terminal)"
+# Vem do repositório próprio; sem acesso ao GitHub, o resto da instalação segue.
+canivt_tmp=$(mktemp -d)
+if git clone -q --depth 1 https://github.com/ezequieljc/canivt.git "$canivt_tmp/canivt" &&
+	"$canivt_tmp/canivt/install.sh" --no-deps; then
+	echo ":: canivt instalado (atalho: Super + E)"
+else
+	warn "não foi possível instalar o canivt agora; rode o instalar.sh de novo mais tarde."
+fi
+rm -rf "$canivt_tmp"
+
+step "5/5  Ajustes finais"
 # xfce4-terminal: sem barra de menu, copiar ao selecionar, fechar sem perguntar.
 term_settings=(
 	"/misc-menubar-default false"
