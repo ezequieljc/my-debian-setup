@@ -162,6 +162,18 @@ else
 	exit 1
 fi
 
+# CopyQ rewrites its own config (tab list, options changed in its UI), so it
+# lives outside home/.config and is seeded once: a redeploy never touches it.
+COPYQ_CONF="$HOME/.config/copyq/copyq.conf"
+DEFAULT_COPYQ_CONF="$SRC/.local/share/omarchy/default/copyq/copyq.conf"
+if [[ -f $COPYQ_CONF ]]; then
+	echo ":: kept existing $COPYQ_CONF"
+else
+	mkdir -p "$(dirname "$COPYQ_CONF")"
+	cp "$DEFAULT_COPYQ_CONF" "$COPYQ_CONF"
+	echo ":: seeded $COPYQ_CONF from defaults"
+fi
+
 echo
 echo "-- 3/4  ~/.xsessionrc (OMARCHY_PATH + PATH) -----------------------------"
 cp "$SRC/.xsessionrc" "$HOME/.xsessionrc.tmp"

@@ -79,6 +79,12 @@ if command -v mpDris2 >/dev/null 2>&1 && ! pgrep -x mpDris2 >/dev/null 2>&1; the
 	mpDris2 &
 fi
 
+# Clipboard history daemon (Super+V opens it). No xdg-autostart runner under
+# bare i3, so start it here.
+if command -v copyq >/dev/null 2>&1 && ! pgrep -x copyq >/dev/null 2>&1; then
+	copyq --start-server >/dev/null 2>&1 &
+fi
+
 # First-run guard: make sure a theme is applied so current/theme/* exists
 # before the bar starts (i3's include of current/theme/i3.conf is non-fatal,
 # but the QS bar palette and omarchy-theme-current depend on it).

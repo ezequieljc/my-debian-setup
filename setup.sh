@@ -96,6 +96,8 @@ RECOMMENDED=(
 	xfce4-terminal
 	# network shares (SMB) in the canivt file manager
 	gvfs-backends gvfs-fuse
+	# clipboard history (Super+V)
+	copyq
 )
 
 # Optional: hardware- or host-specific; nothing breaks without them.
