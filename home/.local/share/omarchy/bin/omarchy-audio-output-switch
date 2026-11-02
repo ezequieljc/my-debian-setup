@@ -6,7 +6,7 @@
 # silently bypass the tuning rather than pick a different output.
 fronted=$(omarchy-audio-tuning fronted-sink 2>/dev/null || true)
 
-sinks=$(timeout 2 pactl -f json list sinks |
+sinks=$(timeout 4 omarchy-audio-graph sinks |
   jq --arg fronted "$fronted" '[.[]
     | select((.ports | length == 0) or ([.ports[]? | .availability != "not available"] | any))
     | select($fronted == "" or .name != $fronted)]')

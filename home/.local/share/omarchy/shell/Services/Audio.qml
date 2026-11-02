@@ -16,7 +16,8 @@ import Quickshell.Io
 //     scripts/volume.sh + volume-listen.sh (kept from the eww port).
 //   * graph    — `nodes`/`defaultAudioSink`/`defaultAudioSource` +
 //     `preferredDefaultAudioSink/Source`, a Pipewire-`nodes`-shaped view for
-//     the `omarchy.audio` panel. Backed by `pactl -f json list` snapshots
+//     the `omarchy.audio` panel. Backed by `omarchy-audio-graph` snapshots
+//     (`pactl -f json` fails on non-ASCII names such as "Áudio interno")
 //     refreshed off a `pactl subscribe` event stream. Node objects are
 //     reused across refreshes so Repeaters don't churn; each carries a
 //     writable `audio.volume`/`audio.muted` that pushes back through pactl.
@@ -232,7 +233,7 @@ QtObject {
 
   property Process _graphProc: Process {
     id: _graphProc
-    command: ["pactl", "-f", "json", "list"]
+    command: ["omarchy-audio-graph"]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: root._ingest(text)
